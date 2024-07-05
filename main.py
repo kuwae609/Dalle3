@@ -1,11 +1,16 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import requests
-import imgsim
 import cv2
-import requests
 import numpy as np
+from imgsim import Vectorizer, distance
 from io import BytesIO
+
+app = FastAPI()
+
+
+class ImageLinkRequest(BaseModel):
+    url: str
 
 
 def load_image_from_url(url):
@@ -19,31 +24,26 @@ def load_image_from_url(url):
 
         return img
     except Exception as e:
-        print(f"Error loading image from url: {e}")
-        return None
+        raise HTTPException(
+            status_code=400, detail=f"Error loading image from url: {e}"
+        )
 
 
-app = FastAPI()
-
-
-class ImageLinkRequest(BaseModel):
-    url: str
-
-
-# 画像リンクの取得エンドポイント
-@app.post("/fetch-image-link/")  # 生成画像のリンク
+@app.post("/fetch-image-link/")
 async def fetch_image_link(image_link_request: ImageLinkRequest):
-    response = requests.get(image_link_request.url)  # 生成画像のダウンロード
-    img0 = load_image_from_url(image_link_request.url)
-    img1 = load_image_from_url(
-        "https://www.udiscovermusic.jp/wp-content/uploads/2020/05/Mickey-Mouse-Steamboat-Willie-web-optimised-1000.jpg"
-    )
-    vtr = imgsim.Vectorizer()
-    vec0 = vtr.vectorize(img0)
-    vec1 = vtr.vectorize(img1)
+    try:
+        img_url = image_link_request.url
+        img0 = load_image_from_url(img_url)
+        img1_url = "https://www.udiscovermusic.jp/wp-content/uploads/2020/05/Mickey-Mouse-Steamboat-Willie-web-optimised-1000.jpg"
+        img1 = load_image_from_url(img1_url)
 
-    dist = imgsim.distance(vec0, vec1)
-    #
-    if response.status_code == 200:
+        vtr = Vectorizer()
+        vec0 = vtr.vectorize(img0)
+        vec1 = vtr.vectorize(img1)
+
+        dist = distance(vec0, vec1)
+
         return {"distance": f"{dist}"}
-    return {"error": "Failed to fetch image"}
+
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error processing images: {e}")
